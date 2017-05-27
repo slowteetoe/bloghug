@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -39,10 +40,12 @@ type entry struct {
 	PublishDate xmlDate    `xml:"published"`
 	Categories  []category `xml:"category"`
 	Title       string     `xml:"title"`
+	Content     string     `xml:"content"`
 }
 
 type category struct {
-	Term string `xml:"term,attr"`
+	Term  string `xml:"term,attr"`
+	Title string `xml:"title"`
 }
 
 func main() {
@@ -63,9 +66,13 @@ func main() {
 	fmt.Printf("Converting '%s' - by %s\n", f.Title, f.AuthorName)
 
 	for _, blogEntry := range f.Entries {
-		fmt.Printf("%s (%s)\n", blogEntry.Title, blogEntry.PublishDate)
+		// everything is lumped together under the <entry> tag
 		for _, v := range blogEntry.Categories {
-			fmt.Printf("\t%s\n", v.Term)
+			// we only want the posts for now
+			if strings.Contains(v.Term, "kind#post") {
+				fmt.Printf("%s (%s)\n", blogEntry.Title, blogEntry.PublishDate)
+				fmt.Printf("\t%s\n\n", blogEntry.Content)
+			}
 		}
 	}
 }
