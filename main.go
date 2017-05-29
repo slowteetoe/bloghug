@@ -2,9 +2,14 @@ package main
 
 import (
 	"encoding/xml"
+	"flag"
 	"fmt"
+	html "html/template"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -48,8 +53,26 @@ type category struct {
 	Title string `xml:"title"`
 }
 
+var (
+	outputDir = flag.String("outputDir", "./content/", "output directory for files, e.g. /fully/qualified/content/")
+)
+
 func main() {
+	flag.Parse()
+
+	if _, err := os.Stat(*outputDir); os.IsNotExist(err) {
+		fmt.Printf("cannot use specified output directory: %v\n", err)
+		return
+	}
+	funcMap := template.FuncMap{"renderSafe": renderSafe}
+	t, err := template.New("output.tmpl").Funcs(funcMap).ParseFiles("templates/output.tmpl")
+	if err != nil {
+		fmt.Printf("unable to parse template: %v\n", err)
+		return
+	}
+
 	fmt.Println("Converting blogger to hugo format")
+
 	xmlFile, err := os.Open("data/blog.xml")
 	if err != nil {
 		fmt.Printf("unable to open file: %v\n", err)
@@ -68,11 +91,39 @@ func main() {
 	for _, blogEntry := range f.Entries {
 		// everything is lumped together under the <entry> tag
 		for _, v := range blogEntry.Categories {
-			// we only want the posts for now
+			// we only want the posts for now, maybe comments later...
 			if strings.Contains(v.Term, "kind#post") {
-				fmt.Printf("%s (%s)\n", blogEntry.Title, blogEntry.PublishDate)
-				fmt.Printf("\t%s\n\n", blogEntry.Content)
+				filename := toFilename(blogEntry.Title)
+				fmt.Printf("Writing to: %s\n", filename)
+				f, err := os.OpenFile(filepath.Join(*outputDir, filename), os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					fmt.Printf("unable to open file to write blog entry: %v\n", err)
+					return
+				}
+				defer f.Close()
+
+				blogEntry.Content = gtRe.ReplaceAllString(ltRe.ReplaceAllString(blogEntry.Content, "<"), ">")
+
+				// fmt.Printf("%s (%s)\n", blogEntry.Title, blogEntry.PublishDate)
+				// fmt.Printf("\t%s\n\n", blogEntry.Content)
+				if err = t.Execute(f, blogEntry); err != nil {
+					fmt.Printf("unable to write template: %v\n", err)
+					return
+				}
 			}
 		}
 	}
+}
+
+var re = regexp.MustCompile("[^a-zA-Z0-9-_]+")
+
+func toFilename(s string) string {
+	return fmt.Sprintf("%s.md", strings.ToLower(re.ReplaceAllString(s, "-")))
+}
+
+var ltRe = regexp.MustCompile("&lt;")
+var gtRe = regexp.MustCompile("&gt;")
+
+func renderSafe(s string) html.HTML {
+	return html.HTML(s)
 }
