@@ -55,6 +55,8 @@ type category struct {
 
 var (
 	outputDir = flag.String("outputDir", "./content/", "output directory for files, e.g. /fully/qualified/content/")
+	ltRe      = regexp.MustCompile("&lt;")
+	gtRe      = regexp.MustCompile("&gt;")
 )
 
 func main() {
@@ -104,12 +106,20 @@ func main() {
 
 				blogEntry.Content = gtRe.ReplaceAllString(ltRe.ReplaceAllString(blogEntry.Content, "<"), ">")
 
-				// fmt.Printf("%s (%s)\n", blogEntry.Title, blogEntry.PublishDate)
-				// fmt.Printf("\t%s\n\n", blogEntry.Content)
+				// remove the http://schemas.google.com/blogger/2008/kind#post category
+				cleanCats := []category{}
+				for i := range blogEntry.Categories {
+					if !strings.Contains(blogEntry.Categories[i].Term, "kind#post") {
+						cleanCats = append(cleanCats, blogEntry.Categories[i])
+					}
+				}
+				blogEntry.Categories = cleanCats
+
 				if err = t.Execute(f, blogEntry); err != nil {
 					fmt.Printf("unable to write template: %v\n", err)
 					return
 				}
+				break
 			}
 		}
 	}
@@ -120,9 +130,6 @@ var re = regexp.MustCompile("[^a-zA-Z0-9-_]+")
 func toFilename(s string) string {
 	return fmt.Sprintf("%s.md", strings.ToLower(re.ReplaceAllString(s, "-")))
 }
-
-var ltRe = regexp.MustCompile("&lt;")
-var gtRe = regexp.MustCompile("&gt;")
 
 func renderSafe(s string) html.HTML {
 	return html.HTML(s)
